@@ -1,0 +1,459 @@
+openapi: 3.0.0
+info:
+  title: DevStep API
+  description: API for DevStep - A Team Step Challenge Application
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        createdAt:
+          type: string
+          format: date-time
+
+    Team:
+      type: object
+      required:
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        challengeId:
+          type: string
+          format: uuid
+        totalSteps:
+          type: integer
+          minimum: 0
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+          maxItems: 100
+
+    Challenge:
+      type: object
+      required:
+        - name
+        - stepGoal
+        - startDate
+        - endDate
+        - teamSize
+        - startCity
+        - endCity
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        stepGoal:
+          type: integer
+          minimum: 1
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        teamSize:
+          type: integer
+          minimum: 1
+        startCity:
+          type: string
+        endCity:
+          type: string
+        status:
+          type: string
+          enum: [CREATED, ACTIVE, COMPLETED]
+        teams:
+          type: array
+          items:
+            $ref: '#/components/schemas/Team'
+          maxItems: 100
+
+    StepEntry:
+      type: object
+      required:
+        - date
+        - steps
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        teamId:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        steps:
+          type: integer
+          minimum: 0
+
+    Statistics:
+      type: object
+      properties:
+        totalSteps:
+          type: integer
+        averageStepsPerDay:
+          type: integer
+        dailySteps:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              steps:
+                type: integer
+
+    MapView:
+      type: object
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        startCity:
+          type: string
+        endCity:
+          type: string
+        totalDistance:
+          type: number
+          description: Total distance in kilometers
+        teams:
+          type: array
+          items:
+            type: object
+            properties:
+              teamId:
+                type: string
+                format: uuid
+              teamName:
+                type: string
+              progress:
+                type: number
+                description: Progress in kilometers
+
+paths:
+  /auth/signup:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '201':
+          description: User created successfully
+        '400':
+          description: Invalid input
+        '409':
+          description: Email already exists
+
+  /auth/login:
+    post:
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+        '401':
+          description: Invalid credentials
+
+  /challenges:
+    post:
+      summary: Create a new challenge
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Challenge'
+      responses:
+        '201':
+          description: Challenge created successfully
+        '400':
+          description: Invalid input
+
+    get:
+      summary: Get all challenges
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of challenges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Challenge'
+
+  /challenges/{challengeId}:
+    get:
+      summary: Get challenge by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: challengeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Challenge details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Challenge'
+        '404':
+          description: Challenge not found
+
+    patch:
+      summary: Update challenge status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: challengeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [ACTIVE, COMPLETED]
+      responses:
+        '200':
+          description: Challenge updated successfully
+        '404':
+          description: Challenge not found
+
+  /teams:
+    post:
+      summary: Create a new team
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Team'
+      responses:
+        '201':
+          description: Team created successfully
+        '400':
+          description: Invalid input
+
+  /teams/{teamId}/members:
+    post:
+      summary: Add member to team
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Member added successfully
+        '404':
+          description: Team not found
+        '409':
+          description: User already in another team
+
+  /steps:
+    post:
+      summary: Register steps
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/StepEntry'
+              maxItems: 7
+      responses:
+        '201':
+          description: Steps registered successfully
+        '400':
+          description: Invalid input or date too old
+
+  /statistics/user:
+    get:
+      summary: Get user statistics
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Statistics'
+
+  /statistics/team/{teamId}:
+    get:
+      summary: Get team statistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Team statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Statistics'
+        '404':
+          description: Team not found
+
+  /statistics/challenge/{challengeId}:
+    get:
+      summary: Get challenge statistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: challengeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Challenge statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalSteps:
+                    type: integer
+                  teamStatistics:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Statistics'
+        '404':
+          description: Challenge not found
+
+  /map/{challengeId}:
+    get:
+      summary: Get map view data
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: challengeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Map view data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MapView'
+        '404':
+          description: Challenge not found
